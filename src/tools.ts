@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Request, Response } from "express";
-import twilio from "twilio";
 
+// kleine interne Liste für gebuchte Termine
 const bookings: Array<{
   id: string;
   service: string;
@@ -12,6 +12,7 @@ const bookings: Array<{
   customerPhone: string;
 }> = [];
 
+// Zeit-Slots erzeugen (9–12 & 13–17 Uhr)
 function generateSlots(date: string) {
   const hours = [
     { start: 9, end: 12 },
@@ -29,6 +30,7 @@ function generateSlots(date: string) {
   return slots.filter(s => !taken.has(s));
 }
 
+// Tool 1: Freie Slots abrufen
 export const getOpenSlots = (req: Request, res: Response) => {
   const schema = z.object({
     service: z.string(),
@@ -43,6 +45,7 @@ export const getOpenSlots = (req: Request, res: Response) => {
   return res.json({ result: free.map(start => ({ start, durationMin: 30 })) });
 };
 
+// Tool 2: Termin speichern
 export const bookAppointment = (req: Request, res: Response) => {
   const schema = z.object({
     service: z.string(),
@@ -64,23 +67,14 @@ export const bookAppointment = (req: Request, res: Response) => {
   return res.json({ result: { bookingId: id } });
 };
 
+// Tool 3: SMS-Bestätigung (Mock-Version – sendet nichts)
 export const sendConfirmation = async (req: Request, res: Response) => {
   const schema = z.object({ to: z.string(), message: z.string().max(500) });
   const parse = schema.safeParse(req.body?.arguments ?? req.body);
   if (!parse.success) return res.status(400).json({ error: parse.error.flatten() });
 
   const { to, message } = parse.data;
-  const sid = process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_FROM;
-  try {
-    if (sid && token && from) {
-      const client = twilio(sid, token);
-      const sms = await client.messages.create({ from, to, body: message });
-      return res.json({ result: { status: "sent", sid: sms.sid } });
-    }
-    return res.json({ result: { status: "mocked", to, message } });
-  } catch (e: any) {
-    return res.status(500).json({ error: e?.message || "SMS send failed" });
-  }
+  // Kein Twilio – nur Testausgabe
+  console.log(`(Mock-SMS) An ${to}: ${message}`);
+  return res.json({ result: { status: "mocked", to, message } });
 };
