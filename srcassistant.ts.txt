@@ -1,0 +1,38 @@
+/**
+},
+{
+name: "check_availability",
+description: "Prüft freie Zeiten für das Datum und liefert Vorschlags-Slots.",
+type: "function",
+parameters: {
+type: "object",
+properties: {
+tenantId: { type: "string" },
+date: { type: "string", description: "YYYY-MM-DD" },
+desired: { type: "string", description: "HH:mm", nullable: true }
+},
+required: ["tenantId","date"]
+},
+server: { url: "${PUBLIC_BASE_URL}/tools/check_availability" }
+},
+{
+name: "notify_chef",
+description: "Sendet eine SMS an den Inhaber mit Terminwunsch und Kundendaten.",
+type: "function",
+parameters: {
+type: "object",
+properties: {
+tenantId: { type: "string" },
+date: { type: "string" },
+time: { type: "string" },
+customerName: { type: "string" },
+customerPhone: { type: "string" },
+service: { type: "string", nullable: true },
+note: { type: "string", nullable: true }
+},
+required: ["tenantId","date","time","customerName","customerPhone"]
+},
+server: { url: "${PUBLIC_BASE_URL}/tools/notify_chef" }
+}
+]
+} as const;
