@@ -1,73 +1,86 @@
 import { z } from "zod";
+import type { Request, Response } from "express";
+import twilio from "twilio";
 
+const bookings: Array<{
+  id: string;
+  service: string;
+  date: string;
+  start: string;
+  durationMin: number;
+  customerName: string;
+  customerPhone: string;
+}> = [];
 
-const to = t.notify_sms_to;
-const body = `Neuer Terminwunsch – ${t.name}\n${date} ${time}${service?` – ${service}`:''}\nKunde: ${customerName} (${customerPhone})${note?`\nHinweis: ${note}`:''}`;
-
-
-const sid = process.env.TWILIO_ACCOUNT_SID; const token = process.env.TWILIO_AUTH_TOKEN; const from = process.env.TWILIO_FROM;
-try {
-if (sid && token && from && to){
-const client = twilio(sid, token);
-const sms = await client.messages.create({ from, to, body });
-return res.json({ result: { status: 'sent', sid: sms.sid } });
+function generateSlots(date: string) {
+  const hours = [
+    { start: 9, end: 12 },
+    { start: 13, end: 17 }
+  ];
+  const slots: string[] = [];
+  for (const h of hours) {
+    for (let m = h.start * 60; m <= (h.end * 60) - 30; m += 30) {
+      const hh = String(Math.floor(m / 60)).padStart(2, "0");
+      const mm = String(m % 60).padStart(2, "0");
+      slots.push(`${hh}:${mm}`);
+    }
+  }
+  const taken = new Set(bookings.filter(b => b.date === date).map(b => b.start));
+  return slots.filter(s => !taken.has(s));
 }
-return res.json({ result: { status: 'mocked', to, body } });
-} catch(e:any){
-return res.status(500).json({ error: e?.message || 'SMS failed' });
-}
+
+export const getOpenSlots = (req: Request, res: Response) => {
+  const schema = z.object({
+    service: z.string(),
+    date: z.string(),
+    timezone: z.string()
+  });
+  const parse = schema.safeParse(req.body?.arguments ?? req.body);
+  if (!parse.success) return res.status(400).json({ error: parse.error.flatten() });
+
+  const { date } = parse.data;
+  const free = generateSlots(date).slice(0, 8);
+  return res.json({ result: free.map(start => ({ start, durationMin: 30 })) });
 };
 
+export const bookAppointment = (req: Request, res: Response) => {
+  const schema = z.object({
+    service: z.string(),
+    date: z.string(),
+    start: z.string(),
+    durationMin: z.number().default(30),
+    customerName: z.string(),
+    customerPhone: z.string()
+  });
+  const parse = schema.safeParse(req.body?.arguments ?? req.body);
+  if (!parse.success) return res.status(400).json({ error: parse.error.flatten() });
 
-export const provisionTenant = (req: Request, res: Response) => {
-const b = (req.body?.arguments ?? req.body) as any;
-const did = String(b.did||'').trim();
-const name = String(b.name||'').trim();
-if (!did || !name) return res.status(400).json({ error: 'did und name erforderlich' });
-const t = ensureTenant(did, { name, address: b.address, ics_url: b.ics_url, notify_sms_to: b.notify_sms_to, timezone: b.timezone });
-return res.json({ result: t });
+  const { service, date, start, durationMin, customerName, customerPhone } = parse.data;
+  if (!generateSlots(date).includes(start)) {
+    return res.status(409).json({ error: "Slot bereits belegt" });
+  }
+  const id = `BK_${Date.now()}`;
+  bookings.push({ id, service, date, start, durationMin, customerName, customerPhone });
+  return res.json({ result: { bookingId: id } });
 };
 
+export const sendConfirmation = async (req: Request, res: Response) => {
+  const schema = z.object({ to: z.string(), message: z.string().max(500) });
+  const parse = schema.safeParse(req.body?.arguments ?? req.body);
+  if (!parse.success) return res.status(400).json({ error: parse.error.flatten() });
 
-export const listAllTenants = (_req: Request, res: Response) => res.json({ result: listTenants() });
-
-
-// ---------- src/server.ts ----------
-import express from "express";
-import dotenv from "dotenv";
-import { assistantDefinition } from "./assistant.js";
-import { resolveTenant, checkAvailability, notifyChef, provisionTenant, listAllTenants } from "./tools.js";
-import { loadDB } from "./tenants.js";
-
-
-dotenv.config();
-loadDB();
-
-
-const app = express();
-app.use(express.json());
-
-
-app.get('/health', (_req,res)=>res.send('ok'));
-
-
-app.get('/assistant.json', (_req,res)=>{
-const base = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT||3030}`;
-const withUrls = JSON.parse(JSON.stringify(assistantDefinition).replaceAll('${PUBLIC_BASE_URL}', base));
-res.json(withUrls);
-});
-
-
-// Vapi API Tools
-app.post('/tools/resolve_tenant', resolveTenant);
-app.post('/tools/check_availability', checkAvailability);
-app.post('/tools/notify_chef', notifyChef);
-
-
-// Admin
-app.post('/admin/provision_tenant', provisionTenant);
-app.get('/admin/tenants', listAllTenants);
-
-
-const PORT = Number(process.env.PORT||3030);
-app.listen(PORT, ()=>{ console.log(`ICS‑Notify Vapi server listening on :${PORT}`); });
+  const { to, message } = parse.data;
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  const from = process.env.TWILIO_FROM;
+  try {
+    if (sid && token && from) {
+      const client = twilio(sid, token);
+      const sms = await client.messages.create({ from, to, body: message });
+      return res.json({ result: { status: "sent", sid: sms.sid } });
+    }
+    return res.json({ result: { status: "mocked", to, message } });
+  } catch (e: any) {
+    return res.status(500).json({ error: e?.message || "SMS send failed" });
+  }
+};
