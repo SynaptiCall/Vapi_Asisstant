@@ -1,5 +1,5 @@
 {
-  "name": "vapi-assistant-api",
+  "name": "vapi-asisstant-api",
   "version": "1.0.0",
   "private": true,
   "type": "commonjs",
@@ -13,3 +13,5 @@
     "node": ">=18"
   }
 }
+
+
