@@ -9,7 +9,6 @@ export const assistantDefinition = {
 - Wenn der Kunde wütend ist: entschuldige dich, bleib ruhig.
 - Sprache: Deutsch, kurz, natürlich, ohne Fachjargon.
 - Wenn passende Slots fehlen: biete Alternativen.`,
-
   tools: [
     {
       name: "get_open_slots",
@@ -46,7 +45,7 @@ export const assistantDefinition = {
     },
     {
       name: "send_confirmation",
-      description: "Sendet dem Kunden eine Bestätigung per SMS.",
+      description: "Sendet dem Kunden eine Bestätigung per SMS (Mock-Version).",
       type: "function",
       parameters: {
         type: "object",
