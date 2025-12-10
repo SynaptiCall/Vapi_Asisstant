@@ -1,8 +1,25 @@
-const express = require("express");
-const app = express();
-
-app.get("/", (_req, res) => res.status(200).send("OK"));
-app.get("/__health", (_req, res) => res.json({ ok: true, port: process.env.PORT }));
+const http = require("http");
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => console.log("✅ API listening on " + port));
+
+const server = http.createServer((req, res) => {
+  if (req.url === "/") {
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.end("OK");
+    return;
+  }
+  if (req.url === "/__health") {
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ ok: true, port }));
+    return;
+  }
+  res.statusCode = 404;
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.end("Not found");
+});
+
+server.listen(port, "0.0.0.0", () => {
+  console.log("✅ HTTP server listening on " + port);
+});
