@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Request, Response } from "express";
 
-// kleine interne Liste für gebuchte Termine
+// interne "Datenbank" – einfache Liste
 const bookings: Array<{
   id: string;
   service: string;
@@ -12,7 +12,7 @@ const bookings: Array<{
   customerPhone: string;
 }> = [];
 
-// Zeit-Slots erzeugen (9–12 & 13–17 Uhr)
+// Termine generieren (9–12 & 13–17 Uhr)
 function generateSlots(date: string) {
   const hours = [
     { start: 9, end: 12 },
@@ -30,7 +30,6 @@ function generateSlots(date: string) {
   return slots.filter(s => !taken.has(s));
 }
 
-// Tool 1: Freie Slots abrufen
 export const getOpenSlots = (req: Request, res: Response) => {
   const schema = z.object({
     service: z.string(),
@@ -45,7 +44,6 @@ export const getOpenSlots = (req: Request, res: Response) => {
   return res.json({ result: free.map(start => ({ start, durationMin: 30 })) });
 };
 
-// Tool 2: Termin speichern
 export const bookAppointment = (req: Request, res: Response) => {
   const schema = z.object({
     service: z.string(),
@@ -67,14 +65,13 @@ export const bookAppointment = (req: Request, res: Response) => {
   return res.json({ result: { bookingId: id } });
 };
 
-// Tool 3: SMS-Bestätigung (Mock-Version – sendet nichts)
+// kein Twilio nötig – sendet nur Testausgabe
 export const sendConfirmation = async (req: Request, res: Response) => {
   const schema = z.object({ to: z.string(), message: z.string().max(500) });
   const parse = schema.safeParse(req.body?.arguments ?? req.body);
   if (!parse.success) return res.status(400).json({ error: parse.error.flatten() });
 
   const { to, message } = parse.data;
-  // Kein Twilio – nur Testausgabe
-  console.log(`(Mock-SMS) An ${to}: ${message}`);
+  console.log(`(Mock-SMS) an ${to}: ${message}`);
   return res.json({ result: { status: "mocked", to, message } });
 };
